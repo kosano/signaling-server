@@ -1,14 +1,11 @@
 use crate::user::User;
 use actix::prelude::{Actor, Context, Handler, Recipient, SendError};
+use actix_web::guard::Options;
 use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::HashMap;
 #[derive(actix::Message)]
 #[rtype(result = "()")]
 pub struct Message(pub String);
-
-// impl actix::Message for Message {
-//     type Result = ();
-// }
 
 pub struct Connect {
     pub uid: usize,
@@ -26,7 +23,7 @@ pub struct DisConnect {
 impl actix::Message for DisConnect {
     type Result = ();
 }
-
+#[derive(Clone, Debug)]
 pub struct Session {
     pub id: usize,
     pub addr: Recipient<Message>,
@@ -34,19 +31,13 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(addr: Recipient<Message>, user: User) -> Self {
+    pub fn new(id: usize, addr: Recipient<Message>, user: User) -> Self {
         Session {
             id: rand::thread_rng().gen::<usize>(),
             addr: addr,
             user: user,
         }
     }
-    // pub fn reset(&mut self, addr: Recipient<Message>, user: User) -> &Self {
-    //     self.id = rand::thread_rng().gen::<usize>();
-    //     self.addr = Some(addr);
-    //     self.user = user;
-    //     self
-    // }
 
     pub fn send_message(&self, message: &str) {
         self.addr
@@ -71,29 +62,26 @@ impl Sessions {
             rng: rand::thread_rng(),
         }
     }
+
+    pub fn get(&self, sid: &usize) -> Option<&Session> {
+        self.sessions.get(sid)
+    }
 }
 
 impl Actor for Sessions {
     type Context = Context<Self>;
 }
 
-// impl Handler<Connect> for Session {
-//     type Result = usize;
+impl Handler<Connect> for Sessions {
+    type Result = usize;
 
-//     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
-//         let Connect { uid, addr } = msg;
-//         let sid = self.rng.gen::<usize>();
-//         self.sessions.insert(
-//             sid,
-//             Session {
-//                 id: sid,
-//                 addr: addr,
-//                 user: User {},
-//             },
-//         );
-//         uid
-//     }
-// }
+    fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
+        let Connect { uid, addr } = msg;
+        let sid = self.rng.gen::<usize>();
+        self.sessions.insert(sid, Session::new(sid, addr, User {}));
+        sid
+    }
+}
 
 impl Handler<DisConnect> for Sessions {
     type Result = ();

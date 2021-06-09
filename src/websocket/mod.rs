@@ -1,7 +1,6 @@
 // use crate::room::Room;
-use crate::room::{
-    Connect, CreateRoom, DisConnect, JoinRoom, Message, RoomServer, SendData, Session,
-};
+use crate::room::status::{Connect, CreateRoom, DisConnect, JoinRoom, Message, SendData};
+use crate::room::RoomServer;
 use crate::user::User;
 use actix::{
     fut, Actor, ActorContext, ActorFuture, Addr, AsyncContext, ContextFutureSpawner, Handler,
@@ -32,8 +31,9 @@ impl WsSession {
         }
     }
     // heath check
-    fn hb(&self, _ctx: &mut ws::WebsocketContext<Self>) {
+    fn hb(&self, ctx: &mut ws::WebsocketContext<Self>) {
         // ctx.run_interval(dur, f);
+        ctx.ping("{ping: {}}".as_bytes());
     }
 }
 
@@ -53,17 +53,14 @@ impl Actor for WsSession {
         let addr = ctx.address();
         self.room_server
             .send(Connect {
-                session: Session {
-                    id: self.id,
-                    addr: addr.recipient(),
-                    user: self.user,
-                },
+                id: self.id,
+                addr: addr.recipient(),
+                user: self.user,
             })
             .into_actor(self)
-            .then(|res, act, ctx| {
+            .then(|res, act, _ctx| {
                 match res {
                     Ok(res) => act.id = res,
-                    // something is wrong with chat server
                     _ => (),
                 }
                 fut::ready(())
@@ -79,6 +76,7 @@ impl Actor for WsSession {
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        println!("{:?}", msg);
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
@@ -86,13 +84,16 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
                 if m.has_key("create_room") {
                     self.room_server
                         .send(CreateRoom {
-                            name: Some("test".to_string()),
+                            name: Some("main".to_string()),
                             sid: self.id,
                         })
                         .into_actor(self)
                         .then(|res, _act, ctx| {
                             match res {
-                                Ok(id) => ctx.text(format!("{:?}", id)),
+                                Ok(id) => {
+                                    println!("{}", &id);
+                                    ctx.text(format!("{}", id.to_string()))
+                                }
                                 // something is wrong with chat server
                                 _ => (),
                             }
@@ -104,13 +105,20 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
                 if m.has_key("join_room") {
                     self.room_server
                         .send(JoinRoom {
-                            rid: m["join_room"]["room_id"].as_usize().unwrap(),
+                            rid: m["join_room"]["room_id"]
+                                .to_string()
+                                .parse::<usize>()
+                                .unwrap()
+                                .clone(),
                             sid: self.id,
                         })
                         .into_actor(self)
                         .then(|res, _act, ctx| {
                             match res {
-                                Ok(id) => ctx.text(format!("{:?}", id)),
+                                Ok(id) => {
+                                    println!("{}", &id);
+                                    ctx.text(format!("{:?}", id))
+                                }
                                 // something is wrong with chat server
                                 _ => (),
                             }
@@ -120,22 +128,24 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
                 }
 
                 if m.has_key("room_send_data") {
-                    self.room_server
-                        .send(SendData {
-                            rid: m["room_send_data"]["room_id"].as_usize().unwrap(),
-                            msg: m["room_send_data"]["message"].to_string(),
-                            sid: self.id,
-                        })
-                        .into_actor(self)
-                        .then(|res, _act, ctx| {
-                            match res {
-                                Ok(id) => ctx.text(format!("{:?}", id)),
-                                // something is wrong with chat server
-                                _ => (),
-                            }
-                            fut::ready(())
-                        })
-                        .wait(ctx);
+                    match m["room_send_data"]["type"].as_str().clone() {
+                        Some("login") => {
+                            ctx.text(m["room_send_data"].to_string());
+                            return;
+                        }
+                        _ => {
+                            self.room_server
+                                .send(SendData {
+                                    rid: m["room_send_data"]["room_id"]
+                                        .to_string()
+                                        .parse::<usize>()
+                                        .unwrap(),
+                                    msg: m["room_send_data"].to_string(),
+                                    sid: self.id,
+                                })
+                                .into_actor(self);
+                        }
+                    }
                 }
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),

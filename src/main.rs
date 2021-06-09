@@ -19,7 +19,7 @@ async fn main() -> std::io::Result<()> {
                 .short("w")
                 .long("worker_number")
                 .help("Worker Running Number")
-                .default_value("1")
+                .default_value("3")
                 .takes_value(true),
         )
         .get_matches();

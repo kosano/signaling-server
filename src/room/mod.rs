@@ -1,53 +1,19 @@
 use crate::user::User;
 use actix::prelude::{Actor, Context, Handler, Recipient, SendError};
 use rand::{self, rngs::ThreadRng, Rng};
+
 use std::collections::HashMap;
-#[derive(actix::Message)]
-#[rtype(result = "()")]
-pub struct Message(pub String);
+pub mod status;
+use status::*;
 
-#[derive(actix::Message)]
-#[rtype(usize)]
-pub struct Connect {
-    pub session: Session,
-}
-
-#[derive(actix::Message)]
-#[rtype(result = "()")]
-pub struct DisConnect {
-    pub id: usize, // session id
-}
-
-#[derive(actix::Message)]
-#[rtype(usize)]
-pub struct CreateRoom {
-    pub name: Option<String>,
-    pub sid: usize,
-}
-
-#[derive(actix::Message)]
-#[rtype(usize)]
-pub struct JoinRoom {
-    pub rid: usize,
-    pub sid: usize,
-}
-
-#[derive(actix::Message)]
-#[rtype(result = "()")]
-pub struct SendData {
-    pub rid: usize,
-    pub msg: String,
-    pub sid: usize,
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Session {
     pub id: usize,
     pub addr: Recipient<Message>,
     pub user: User,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Room {
     pub id: usize,
     pub name: Option<String>,
@@ -113,14 +79,14 @@ impl RoomServer {
         }
     }
 
-    pub fn create_room(&mut self, name: Option<String>, session: Session) -> &Room {
+    pub fn create_room(&mut self, name: Option<String>, session: Session) -> usize {
         let rid = self.rng.gen::<usize>();
-        let mut room = Room::new();
+        let ref mut room = Room::new();
         room.id = rid;
         room.name = name;
         room.join(session);
         self.rooms.insert(rid, room.clone());
-        self.rooms.get(&rid).unwrap()
+        rid
     }
 
     pub fn join_room(&mut self, rid: &usize, sid: &usize) -> &Room {
@@ -144,9 +110,16 @@ impl Handler<Connect> for RoomServer {
     type Result = usize;
 
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
-        println!("User {:?} Connect.", msg.session.id);
-        self.sessions.insert(msg.session.id, msg.session.clone());
-        msg.session.id
+        println!("User {:?} Connect.", msg.id);
+        self.sessions.insert(
+            msg.id,
+            Session {
+                id: msg.id,
+                addr: msg.addr,
+                user: msg.user,
+            },
+        );
+        msg.id
     }
 }
 
@@ -167,8 +140,8 @@ impl Handler<CreateRoom> for RoomServer {
 
     fn handle(&mut self, msg: CreateRoom, _: &mut Context<Self>) -> Self::Result {
         println!("User {:?} CreateRoom.", msg.sid);
-        let room = self.create_room(msg.name, self.sessions.get(&msg.sid).unwrap().clone());
-        room.id
+        let room_id = self.create_room(msg.name, self.sessions.get(&msg.sid).unwrap().clone());
+        room_id
     }
 }
 
