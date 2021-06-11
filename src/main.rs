@@ -11,7 +11,7 @@ async fn main() -> std::io::Result<()> {
                 .short("l")
                 .long("listen")
                 .help("listen address")
-                .default_value("127.0.0.1:8081")
+                .default_value("127.0.0.1:8080")
                 .takes_value(true),
         )
         .arg(

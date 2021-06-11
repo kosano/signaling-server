@@ -1,5 +1,4 @@
 use crate::room::RoomServer;
-use crate::session::Sessions;
 use crate::websocket;
 use actix::Actor;
 use actix_web::{web, App, HttpServer};

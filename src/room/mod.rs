@@ -34,16 +34,16 @@ impl Room {
     }
 
     pub fn join(&mut self, session: Session) -> &Self {
-        self.room_send(
-            format!("User {:?} Join Room.", session.id).as_str(),
-            &session.id,
-        );
+        // self.room_send(
+        //     format!("User {:?} Join Room.", session.id).as_str(),
+        //     &session.id,
+        // );
         self.sessions.insert(session.id, session);
         self
     }
 
     pub fn leave(&mut self, sid: &usize) -> &Self {
-        self.room_send(format!("User {:?} Leave Room.", *sid).as_str(), sid);
+        // self.room_send(format!("User {:?} Leave Room.", *sid).as_str(), sid);
         match self.sessions.get(sid) {
             Some(_) => self.sessions.remove(sid),
             _ => None,

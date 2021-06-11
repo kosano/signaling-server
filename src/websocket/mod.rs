@@ -10,6 +10,8 @@ use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
+pub mod response;
+use response::{CreateRoomResponse, RoomMessage};
 extern crate json;
 /// Define HTTP actor
 pub struct WsSession {
@@ -91,10 +93,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
                         .then(|res, _act, ctx| {
                             match res {
                                 Ok(id) => {
-                                    println!("{}", &id);
-                                    ctx.text(format!("{}", id.to_string()))
+                                    let res =
+                                        CreateRoomResponse::new((id.to_string(), None)).marshal();
+                                    println!("{}", res);
+                                    ctx.text(res)
                                 }
-                                // something is wrong with chat server
                                 _ => (),
                             }
                             fut::ready(())
@@ -134,16 +137,33 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
                             return;
                         }
                         _ => {
+                            let room_msg = RoomMessage::new((
+                                m["room_send_data"]["room_id"].to_string(),
+                                m["room_send_data"]["type"].to_string(),
+                                m["room_send_data"]["data"].to_string(),
+                            ))
+                            .marshal();
+                            println!("{}", room_msg);
                             self.room_server
                                 .send(SendData {
                                     rid: m["room_send_data"]["room_id"]
                                         .to_string()
                                         .parse::<usize>()
                                         .unwrap(),
-                                    msg: m["room_send_data"].to_string(),
+                                    msg: room_msg,
                                     sid: self.id,
                                 })
-                                .into_actor(self);
+                                .into_actor(self)
+                                .then(|res, _act, _ctx| {
+                                    match res {
+                                        Ok(res) => {
+                                            println!("{:?}", res);
+                                        }
+                                        _ => (),
+                                    }
+                                    fut::ready(())
+                                })
+                                .wait(ctx);
                         }
                     }
                 }
